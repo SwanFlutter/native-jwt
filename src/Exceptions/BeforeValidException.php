@@ -2,6 +2,4 @@
 
 namespace SwanFlutter\NativeJwt\Exceptions;
 
-class BeforeValidException extends JWTException
-{
-}
+class BeforeValidException extends JWTException {}

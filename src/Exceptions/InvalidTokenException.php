@@ -2,6 +2,4 @@
 
 namespace SwanFlutter\NativeJwt\Exceptions;
 
-class InvalidTokenException extends JWTException
-{
-}
+class InvalidTokenException extends JWTException {}

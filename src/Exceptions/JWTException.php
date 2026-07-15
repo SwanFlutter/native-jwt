@@ -2,6 +2,4 @@
 
 namespace SwanFlutter\NativeJwt\Exceptions;
 
-class JWTException extends \Exception
-{
-}
+class JWTException extends \Exception {}

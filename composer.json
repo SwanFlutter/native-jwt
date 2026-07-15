@@ -3,6 +3,7 @@
     "description": "A standalone, dependency-free JWT library for PHP (HMAC, RSA, ECDSA) with built-in algorithm-confusion and alg=none protection.",
     "type": "library",
     "license": "MIT",
+    "version": "1.0.0",
     "keywords": [
         "jwt",
         "token",

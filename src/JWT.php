@@ -69,11 +69,11 @@ final class JWT
     /**
      * Encode and sign a payload into a JWT string.
      *
-     * @param array                            $payload      claim set
-     * @param string|\OpenSSLAsymmetricKey     $key          signing key
-     * @param string                           $alg          algorithm name (e.g. HS256)
-     * @param string|null                      $keyId        optional "kid" header value
-     * @param array<string, mixed>             $extraHeaders additional header entries
+     * @param  array  $payload  claim set
+     * @param  string|\OpenSSLAsymmetricKey  $key  signing key
+     * @param  string  $alg  algorithm name (e.g. HS256)
+     * @param  string|null  $keyId  optional "kid" header value
+     * @param  array<string, mixed>  $extraHeaders  additional header entries
      */
     public static function encode(
         array $payload,
@@ -82,7 +82,7 @@ final class JWT
         ?string $keyId = null,
         array $extraHeaders = []
     ): string {
-        if (!isset(self::ALGORITHMS[$alg])) {
+        if (! isset(self::ALGORITHMS[$alg])) {
             throw new JWTException("Unsupported algorithm: {$alg}");
         }
 
@@ -112,9 +112,8 @@ final class JWT
     /**
      * Decode and verify a JWT.
      *
-     * @param string                  $jwt        the token
-     * @param Key|array<string, Key>  $keyOrKeys  a single Key or a kid => Key map
-     *
+     * @param  string  $jwt  the token
+     * @param  Key|array<string, Key>  $keyOrKeys  a single Key or a kid => Key map
      * @return array<string, mixed> the verified payload
      */
     public static function decode(string $jwt, $keyOrKeys): array
@@ -136,15 +135,15 @@ final class JWT
         $header = self::jsonDecode($headerRaw);
         $payload = self::jsonDecode($payloadRaw);
 
-        if (!is_array($header)) {
+        if (! is_array($header)) {
             throw new InvalidTokenException('Invalid token header.');
         }
 
-        if (!is_array($payload)) {
+        if (! is_array($payload)) {
             throw new InvalidTokenException('Invalid token payload.');
         }
 
-        if (empty($header['alg']) || !is_string($header['alg'])) {
+        if (empty($header['alg']) || ! is_string($header['alg'])) {
             throw new InvalidTokenException('Algorithm is missing from the header.');
         }
 
@@ -155,7 +154,7 @@ final class JWT
             throw new SignatureInvalidException('The "none" algorithm is not allowed.');
         }
 
-        if (!isset(self::ALGORITHMS[$alg])) {
+        if (! isset(self::ALGORITHMS[$alg])) {
             throw new SignatureInvalidException("Unsupported algorithm: {$alg}");
         }
 
@@ -163,15 +162,15 @@ final class JWT
 
         // Prevent algorithm confusion: the token algorithm must match the
         // algorithm the trusted key is bound to, exactly.
-        if (!hash_equals($key->getAlgorithm(), $alg)) {
+        if (! hash_equals($key->getAlgorithm(), $alg)) {
             throw new SignatureInvalidException(
                 'Token algorithm does not match the expected key algorithm.'
             );
         }
 
-        $signingInput = $headB64 . '.' . $payloadB64;
+        $signingInput = $headB64.'.'.$payloadB64;
 
-        if (!self::verify($signingInput, $signature, $key->getKeyMaterial(), $alg)) {
+        if (! self::verify($signingInput, $signature, $key->getKeyMaterial(), $alg)) {
             throw new SignatureInvalidException('Token signature is invalid.');
         }
 
@@ -185,7 +184,7 @@ final class JWT
     // ---------------------------------------------------------------------
 
     /**
-     * @param Key|array<string, Key> $keyOrKeys
+     * @param  Key|array<string, Key>  $keyOrKeys
      */
     private static function selectKey($keyOrKeys, array $header): Key
     {
@@ -194,7 +193,7 @@ final class JWT
         }
 
         if (is_array($keyOrKeys)) {
-            if (empty($header['kid']) || !is_string($header['kid'])) {
+            if (empty($header['kid']) || ! is_string($header['kid'])) {
                 throw new InvalidTokenException(
                     'Token must contain a "kid" when a key set is provided.'
                 );
@@ -202,11 +201,11 @@ final class JWT
 
             $kid = $header['kid'];
 
-            if (!isset($keyOrKeys[$kid])) {
+            if (! isset($keyOrKeys[$kid])) {
                 throw new InvalidTokenException("No key found for kid \"{$kid}\".");
             }
 
-            if (!($keyOrKeys[$kid] instanceof Key)) {
+            if (! ($keyOrKeys[$kid] instanceof Key)) {
                 throw new JWTException('Each entry must be an instance of Key.');
             }
 
@@ -221,12 +220,12 @@ final class JWT
     // ---------------------------------------------------------------------
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private static function validateClaims(array $payload, int $now): void
     {
         if (isset($payload['nbf'])) {
-            if (!is_numeric($payload['nbf'])) {
+            if (! is_numeric($payload['nbf'])) {
                 throw new InvalidTokenException('The "nbf" claim is invalid.');
             }
 
@@ -236,7 +235,7 @@ final class JWT
         }
 
         if (isset($payload['iat'])) {
-            if (!is_numeric($payload['iat'])) {
+            if (! is_numeric($payload['iat'])) {
                 throw new InvalidTokenException('The "iat" claim is invalid.');
             }
 
@@ -246,7 +245,7 @@ final class JWT
         }
 
         if (isset($payload['exp'])) {
-            if (!is_numeric($payload['exp'])) {
+            if (! is_numeric($payload['exp'])) {
                 throw new InvalidTokenException('The "exp" claim is invalid.');
             }
 
@@ -261,7 +260,7 @@ final class JWT
     // ---------------------------------------------------------------------
 
     /**
-     * @param string|\OpenSSLAsymmetricKey $key
+     * @param  string|\OpenSSLAsymmetricKey  $key
      */
     private static function sign(string $input, $key, string $alg): string
     {
@@ -269,7 +268,7 @@ final class JWT
 
         switch ($type) {
             case 'hmac':
-                if (!is_string($key)) {
+                if (! is_string($key)) {
                     throw new JWTException('HMAC key must be a string.');
                 }
 
@@ -279,8 +278,8 @@ final class JWT
                 $signature = '';
                 $ok = openssl_sign($input, $signature, $key, $hashAlg);
 
-                if (!$ok) {
-                    throw new JWTException('OpenSSL signing failed: ' . openssl_error_string());
+                if (! $ok) {
+                    throw new JWTException('OpenSSL signing failed: '.openssl_error_string());
                 }
 
                 return $signature;
@@ -289,8 +288,8 @@ final class JWT
                 $signature = '';
                 $ok = openssl_sign($input, $signature, $key, $hashAlg);
 
-                if (!$ok) {
-                    throw new JWTException('ECDSA signing failed: ' . openssl_error_string());
+                if (! $ok) {
+                    throw new JWTException('ECDSA signing failed: '.openssl_error_string());
                 }
 
                 // Convert the DER signature produced by OpenSSL into the
@@ -303,7 +302,7 @@ final class JWT
     }
 
     /**
-     * @param string|\OpenSSLAsymmetricKey $key
+     * @param  string|\OpenSSLAsymmetricKey  $key
      */
     private static function verify(string $input, string $signature, $key, string $alg): bool
     {
@@ -311,7 +310,7 @@ final class JWT
 
         switch ($type) {
             case 'hmac':
-                if (!is_string($key)) {
+                if (! is_string($key)) {
                     throw new JWTException('HMAC key must be a string.');
                 }
 
@@ -324,7 +323,7 @@ final class JWT
                 $result = openssl_verify($input, $signature, $key, $hashAlg);
 
                 if ($result === -1) {
-                    throw new JWTException('OpenSSL error: ' . openssl_error_string());
+                    throw new JWTException('OpenSSL error: '.openssl_error_string());
                 }
 
                 return $result === 1;
@@ -335,7 +334,7 @@ final class JWT
                 $result = openssl_verify($input, $der, $key, $hashAlg);
 
                 if ($result === -1) {
-                    throw new JWTException('OpenSSL error (ECDSA): ' . openssl_error_string());
+                    throw new JWTException('OpenSSL error (ECDSA): '.openssl_error_string());
                 }
 
                 return $result === 1;
@@ -359,7 +358,7 @@ final class JWT
 
         // Total sequence length (may be one or two bytes).
         if (ord($der[$offset]) & 0x80) {
-            $offset += (ord($der[$offset]) & 0x7f) + 1;
+            $offset += (ord($der[$offset]) & 0x7F) + 1;
         } else {
             $offset++;
         }
@@ -371,7 +370,7 @@ final class JWT
         $r = str_pad(ltrim($r, "\x00"), $half, "\x00", STR_PAD_LEFT);
         $s = str_pad(ltrim($s, "\x00"), $half, "\x00", STR_PAD_LEFT);
 
-        return $r . $s;
+        return $r.$s;
     }
 
     private static function readDerInteger(string $der, int &$offset): string
@@ -402,9 +401,9 @@ final class JWT
         $r = self::encodeDerInteger($r);
         $s = self::encodeDerInteger($s);
 
-        $body = $r . $s;
+        $body = $r.$s;
 
-        return "\x30" . self::encodeDerLength(strlen($body)) . $body;
+        return "\x30".self::encodeDerLength(strlen($body)).$body;
     }
 
     private static function encodeDerInteger(string $int): string
@@ -417,10 +416,10 @@ final class JWT
 
         // If the high bit is set, prepend 0x00 so the integer stays positive.
         if (ord($int[0]) & 0x80) {
-            $int = "\x00" . $int;
+            $int = "\x00".$int;
         }
 
-        return "\x02" . self::encodeDerLength(strlen($int)) . $int;
+        return "\x02".self::encodeDerLength(strlen($int)).$int;
     }
 
     private static function encodeDerLength(int $length): string
@@ -432,11 +431,11 @@ final class JWT
         $bytes = '';
 
         while ($length > 0) {
-            $bytes = chr($length & 0xff) . $bytes;
+            $bytes = chr($length & 0xFF).$bytes;
             $length >>= 8;
         }
 
-        return chr(0x80 | strlen($bytes)) . $bytes;
+        return chr(0x80 | strlen($bytes)).$bytes;
     }
 
     // ---------------------------------------------------------------------
@@ -470,7 +469,7 @@ final class JWT
         $json = json_encode($input, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         if ($json === false || json_last_error() !== JSON_ERROR_NONE) {
-            throw new JWTException('JSON encoding error: ' . json_last_error_msg());
+            throw new JWTException('JSON encoding error: '.json_last_error_msg());
         }
 
         return $json;
@@ -484,7 +483,7 @@ final class JWT
         $data = json_decode($input, true, 512, JSON_BIGINT_AS_STRING);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new InvalidTokenException('JSON decoding error: ' . json_last_error_msg());
+            throw new InvalidTokenException('JSON decoding error: '.json_last_error_msg());
         }
 
         return $data;

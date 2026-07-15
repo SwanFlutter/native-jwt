@@ -2,6 +2,4 @@
 
 namespace SwanFlutter\NativeJwt\Exceptions;
 
-class SignatureInvalidException extends JWTException
-{
-}
+class SignatureInvalidException extends JWTException {}

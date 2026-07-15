@@ -18,7 +18,7 @@ final class Key
     private string $algorithm;
 
     /**
-     * @param string|\OpenSSLAsymmetricKey $keyMaterial
+     * @param  string|\OpenSSLAsymmetricKey  $keyMaterial
      */
     public function __construct($keyMaterial, string $algorithm)
     {
@@ -26,7 +26,7 @@ final class Key
             throw new JWTException('Key cannot be empty.');
         }
 
-        if (!in_array($algorithm, JWT::SUPPORTED_ALGS, true)) {
+        if (! in_array($algorithm, JWT::SUPPORTED_ALGS, true)) {
             throw new JWTException("Unsupported algorithm: {$algorithm}");
         }
 

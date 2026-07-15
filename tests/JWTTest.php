@@ -43,7 +43,7 @@ final class JWTTest extends TestCase
         // A minimal OpenSSL config is bundled so key generation works even on
         // systems where the default openssl.cnf is missing (e.g. some Windows
         // PHP builds). It is used only by the tests, never by the library.
-        $this->cnf = __DIR__ . '/fixtures/openssl.cnf';
+        $this->cnf = __DIR__.'/fixtures/openssl.cnf';
 
         $rsa = openssl_pkey_new([
             'private_key_type' => OPENSSL_KEYTYPE_RSA,
@@ -67,7 +67,7 @@ final class JWTTest extends TestCase
     //  HMAC
     // ---------------------------------------------------------------------
 
-    public function testHs256RoundTrip(): void
+    public function test_hs256_round_trip(): void
     {
         $payload = ['sub' => 'user-1', 'exp' => time() + 3600];
 
@@ -77,7 +77,7 @@ final class JWTTest extends TestCase
         self::assertSame($payload, $decoded);
     }
 
-    public function testHs384AndHs512RoundTrip(): void
+    public function test_hs384_and_hs512_round_trip(): void
     {
         foreach (['HS384', 'HS512'] as $alg) {
             $token = JWT::encode(['a' => 1], $this->secret, $alg);
@@ -89,7 +89,7 @@ final class JWTTest extends TestCase
     //  RSA
     // ---------------------------------------------------------------------
 
-    public function testRs256RoundTrip(): void
+    public function test_rs256_round_trip(): void
     {
         $payload = ['sub' => 'user-2', 'exp' => time() + 3600];
 
@@ -99,7 +99,7 @@ final class JWTTest extends TestCase
         self::assertSame($payload, $decoded);
     }
 
-    public function testRs384AndRs512RoundTrip(): void
+    public function test_rs384_and_rs512_round_trip(): void
     {
         foreach (['RS384', 'RS512'] as $alg) {
             $token = JWT::encode(['b' => 2], $this->rsaPrivate, $alg);
@@ -111,7 +111,7 @@ final class JWTTest extends TestCase
     //  ECDSA
     // ---------------------------------------------------------------------
 
-    public function testEs256RoundTrip(): void
+    public function test_es256_round_trip(): void
     {
         $payload = ['sub' => 'user-3', 'exp' => time() + 3600];
 
@@ -121,7 +121,7 @@ final class JWTTest extends TestCase
         self::assertSame($payload, $decoded);
     }
 
-    public function testEs384RoundTrip(): void
+    public function test_es384_round_trip(): void
     {
         $token = JWT::encode(['c' => 3], $this->ecPrivate, 'ES384');
         self::assertSame(['c' => 3], JWT::decode($token, new Key($this->ecPublic, 'ES384')));
@@ -131,13 +131,13 @@ final class JWTTest extends TestCase
      * Verifies the library against the official RFC 7515 Appendix A.3 vector.
      * This independently confirms the DER <-> R||S signature conversion.
      */
-    public function testEs256Rfc7515Vector(): void
+    public function test_es256_rfc7515_vector(): void
     {
         $header = 'eyJhbGciOiJFUzI1NiJ9';
         $payload = 'eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ';
         $signature = 'DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q';
 
-        $token = $header . '.' . $payload . '.' . $signature;
+        $token = $header.'.'.$payload.'.'.$signature;
 
         $pubKey = self::buildP256PublicKey(
             'f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU',
@@ -158,27 +158,27 @@ final class JWTTest extends TestCase
     //  Security: alg=none and algorithm confusion
     // ---------------------------------------------------------------------
 
-    public function testAlgNoneIsRejected(): void
+    public function test_alg_none_is_rejected(): void
     {
         $token = JWT::encode(['sub' => 'x'], $this->secret, 'HS256');
-        $token = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.' . substr($token, strpos($token, '.') + 1);
+        $token = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.'.substr($token, strpos($token, '.') + 1);
 
         $this->expectException(SignatureInvalidException::class);
 
         JWT::decode($token, new Key($this->secret, 'HS256'));
     }
 
-    public function testUnsupportedAlgorithmIsRejected(): void
+    public function test_unsupported_algorithm_is_rejected(): void
     {
         $token = JWT::encode(['sub' => 'x'], $this->secret, 'HS256');
-        $token = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.' . substr($token, strpos($token, '.') + 1);
+        $token = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.'.substr($token, strpos($token, '.') + 1);
 
         $this->expectException(SignatureInvalidException::class);
 
         JWT::decode($token, new Key($this->secret, 'HS256'));
     }
 
-    public function testAlgorithmConfusionIsPrevented(): void
+    public function test_algorithm_confusion_is_prevented(): void
     {
         // Token is signed with HMAC but the trusted key is bound to RSA.
         $token = JWT::encode(['sub' => 'x'], $this->secret, 'HS256');
@@ -192,17 +192,17 @@ final class JWTTest extends TestCase
     //  Signature / tampering
     // ---------------------------------------------------------------------
 
-    public function testInvalidSignatureIsRejected(): void
+    public function test_invalid_signature_is_rejected(): void
     {
         $token = JWT::encode(['sub' => 'x'], $this->secret, 'HS256');
-        $token = substr($token, 0, -3) . 'AAA';
+        $token = substr($token, 0, -3).'AAA';
 
         $this->expectException(SignatureInvalidException::class);
 
         JWT::decode($token, new Key($this->secret, 'HS256'));
     }
 
-    public function testTamperedPayloadIsRejected(): void
+    public function test_tampered_payload_is_rejected(): void
     {
         $token = JWT::encode(['sub' => 'x', 'role' => 'user'], $this->secret, 'HS256');
         [$h, $p, $s] = explode('.', $token);
@@ -213,10 +213,10 @@ final class JWTTest extends TestCase
 
         $this->expectException(SignatureInvalidException::class);
 
-        JWT::decode($h . '.' . $p . '.' . $s, new Key($this->secret, 'HS256'));
+        JWT::decode($h.'.'.$p.'.'.$s, new Key($this->secret, 'HS256'));
     }
 
-    public function testWrongHmacKeyIsRejected(): void
+    public function test_wrong_hmac_key_is_rejected(): void
     {
         $token = JWT::encode(['sub' => 'x'], $this->secret, 'HS256');
 
@@ -229,7 +229,7 @@ final class JWTTest extends TestCase
     //  Time-based claims
     // ---------------------------------------------------------------------
 
-    public function testExpiredTokenThrows(): void
+    public function test_expired_token_throws(): void
     {
         JWT::$timestamp = 1_000_000_000;
         $token = JWT::encode(['exp' => 1_000_000_000], $this->secret, 'HS256');
@@ -241,7 +241,7 @@ final class JWTTest extends TestCase
         JWT::decode($token, new Key($this->secret, 'HS256'));
     }
 
-    public function testLeewayAllowsSlightlyExpiredToken(): void
+    public function test_leeway_allows_slightly_expired_token(): void
     {
         JWT::$timestamp = 1_000_000_000;
         $token = JWT::encode(['exp' => 1_000_000_000], $this->secret, 'HS256');
@@ -254,7 +254,7 @@ final class JWTTest extends TestCase
         self::assertSame(1_000_000_000, $decoded['exp']);
     }
 
-    public function testNbfInFutureThrows(): void
+    public function test_nbf_in_future_throws(): void
     {
         JWT::$timestamp = 1_000_000_000;
         $token = JWT::encode(['nbf' => 1_000_000_100], $this->secret, 'HS256');
@@ -264,7 +264,7 @@ final class JWTTest extends TestCase
         JWT::decode($token, new Key($this->secret, 'HS256'));
     }
 
-    public function testIatInFutureThrows(): void
+    public function test_iat_in_future_throws(): void
     {
         JWT::$timestamp = 1_000_000_000;
         $token = JWT::encode(['iat' => 1_000_000_100], $this->secret, 'HS256');
@@ -278,7 +278,7 @@ final class JWTTest extends TestCase
     //  Keys & kid
     // ---------------------------------------------------------------------
 
-    public function testMultipleKeysWithKid(): void
+    public function test_multiple_keys_with_kid(): void
     {
         $payload = ['sub' => 'kid-user'];
 
@@ -300,7 +300,7 @@ final class JWTTest extends TestCase
         self::assertSame($payload, JWT::decode($token, $keys));
     }
 
-    public function testMissingKidWithKeySetThrows(): void
+    public function test_missing_kid_with_key_set_throws(): void
     {
         $token = JWT::encode(['sub' => 'x'], $this->rsaPrivate, 'RS256');
 
@@ -309,7 +309,7 @@ final class JWTTest extends TestCase
         JWT::decode($token, ['key-2025' => new Key($this->rsaPublic, 'RS256')]);
     }
 
-    public function testUnknownKidThrows(): void
+    public function test_unknown_kid_throws(): void
     {
         $token = JWT::encode(['sub' => 'x'], $this->rsaPrivate, 'RS256', 'key-2024');
 
@@ -322,36 +322,36 @@ final class JWTTest extends TestCase
     //  Malformed tokens
     // ---------------------------------------------------------------------
 
-    public function testNotThreeSegmentsThrows(): void
+    public function test_not_three_segments_throws(): void
     {
         $this->expectException(InvalidTokenException::class);
 
         JWT::decode('only.two', new Key($this->secret, 'HS256'));
     }
 
-    public function testInvalidBase64Throws(): void
+    public function test_invalid_base64_throws(): void
     {
         $this->expectException(InvalidTokenException::class);
 
         JWT::decode('!!!.!!!.!!!', new Key($this->secret, 'HS256'));
     }
 
-    public function testMissingAlgHeaderThrows(): void
+    public function test_missing_alg_header_throws(): void
     {
         $header = JWT::urlsafeB64Encode((string) json_encode(['typ' => 'JWT']));
         $payload = JWT::urlsafeB64Encode((string) json_encode(['sub' => 'x']));
-        $sig = JWT::urlsafeB64Encode(hash_hmac('sha256', $header . '.' . $payload, $this->secret, true));
+        $sig = JWT::urlsafeB64Encode(hash_hmac('sha256', $header.'.'.$payload, $this->secret, true));
 
         $this->expectException(InvalidTokenException::class);
 
-        JWT::decode($header . '.' . $payload . '.' . $sig, new Key($this->secret, 'HS256'));
+        JWT::decode($header.'.'.$payload.'.'.$sig, new Key($this->secret, 'HS256'));
     }
 
     // ---------------------------------------------------------------------
     //  Helpers & edge cases
     // ---------------------------------------------------------------------
 
-    public function testUrlsafeB64RoundTrip(): void
+    public function test_urlsafe_b64_round_trip(): void
     {
         $data = random_bytes(64);
 
@@ -361,7 +361,7 @@ final class JWTTest extends TestCase
         self::assertStringNotContainsString('/', JWT::urlsafeB64Encode($data));
     }
 
-    public function testUnicodePayloadRoundTrip(): void
+    public function test_unicode_payload_round_trip(): void
     {
         $payload = ['name' => 'سعید', 'emoji' => '🔐', 'nested' => ['x' => 'τεστ']];
 
@@ -371,7 +371,7 @@ final class JWTTest extends TestCase
         self::assertSame($payload, $decoded);
     }
 
-    public function testEncodeWithKeyIdHeader(): void
+    public function test_encode_with_key_id_header(): void
     {
         $token = JWT::encode(['sub' => 'x'], $this->secret, 'HS256', 'my-kid');
 
@@ -381,14 +381,14 @@ final class JWTTest extends TestCase
         self::assertSame('my-kid', $header['kid']);
     }
 
-    public function testKeyRejectsEmptyMaterial(): void
+    public function test_key_rejects_empty_material(): void
     {
         $this->expectException(JWTException::class);
 
         new Key('', 'HS256');
     }
 
-    public function testKeyRejectsUnsupportedAlgorithm(): void
+    public function test_key_rejects_unsupported_algorithm(): void
     {
         $this->expectException(JWTException::class);
 
@@ -401,21 +401,21 @@ final class JWTTest extends TestCase
      */
     private static function buildP256PublicKey(string $x, string $y): string
     {
-        $point = "\x04" . JWT::urlsafeB64Decode($x) . JWT::urlsafeB64Decode($y);
+        $point = "\x04".JWT::urlsafeB64Decode($x).JWT::urlsafeB64Decode($y);
 
         // BIT STRING wrapping the uncompressed point (unused-bits byte 0x00).
-        $bitString = "\x03" . chr(strlen($point) + 1) . "\x00" . $point;
+        $bitString = "\x03".chr(strlen($point) + 1)."\x00".$point;
 
         // AlgorithmIdentifier: EC public key (1.2.840.10045.2.1) + prime256v1.
         $ecPublicKey = "\x06\x07\x2a\x86\x48\xce\x3d\x02\x01";
         $prime256v1 = "\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07";
-        $algId = "\x30" . chr(strlen($ecPublicKey) + strlen($prime256v1)) . $ecPublicKey . $prime256v1;
+        $algId = "\x30".chr(strlen($ecPublicKey) + strlen($prime256v1)).$ecPublicKey.$prime256v1;
 
-        $spki = "\x30" . chr(strlen($algId) + strlen($bitString)) . $algId . $bitString;
+        $spki = "\x30".chr(strlen($algId) + strlen($bitString)).$algId.$bitString;
 
         $pem = "-----BEGIN PUBLIC KEY-----\n"
-            . chunk_split(base64_encode($spki), 64, "\n")
-            . "-----END PUBLIC KEY-----\n";
+            .chunk_split(base64_encode($spki), 64, "\n")
+            ."-----END PUBLIC KEY-----\n";
 
         $key = openssl_pkey_get_public($pem);
         self::assertNotFalse($key, 'Failed to load constructed P-256 public key.');
