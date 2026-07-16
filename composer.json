@@ -1,9 +1,9 @@
 {
     "name": "swanflutter/native-jwt",
-    "description": "A standalone, dependency-free JWT library for PHP (HMAC, RSA, ECDSA) with built-in algorithm-confusion and alg=none protection.",
+    "description": "A PHP 8.1+ JWT library (HMAC, RSA, ECDSA, EdDSA, RSASSA-PSS) with JWK/JWKS support, PSR-6 cached key sets, and built-in algorithm-confusion and alg=none protection.",
     "type": "library",
     "license": "MIT",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "keywords": [
         "jwt",
         "token",
@@ -11,8 +11,14 @@
         "hmac",
         "rsa",
         "ecdsa",
-        "standalone",
-        "firebase"
+        "eddsa",
+        "ed25519",
+        "rsa-pss",
+        "jwk",
+        "jwks",
+        "firebase",
+        "fcm",
+        "standalone"
     ],
     "authors": [
         {
@@ -31,9 +37,19 @@
         "ext-openssl": "*",
         "ext-hash": "*"
     },
+    "suggest": {
+        "ext-sodium": "Required for EdDSA (Ed25519) algorithm support.",
+        "ext-gmp": "Required for JWK RSA key parsing (JWK::parseKeySet).",
+        "psr/http-client": "Required for CachedKeySet (PSR-18 HTTP client).",
+        "psr/http-factory": "Required for CachedKeySet (PSR-17 request factory).",
+        "psr/cache": "Required for CachedKeySet (PSR-6 cache pool)."
+    },
     "require-dev": {
         "phpunit/phpunit": "^10.5|^11.0|^12.0",
-        "laravel/pint": "^1.17|^2.0"
+        "laravel/pint": "^1.17|^2.0",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/cache": "^3.0"
     },
     "autoload": {
         "psr-4": {

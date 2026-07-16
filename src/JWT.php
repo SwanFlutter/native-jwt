@@ -11,36 +11,55 @@ use SwanFlutter\NativeJwt\Exceptions\JWTException;
 use SwanFlutter\NativeJwt\Exceptions\SignatureInvalidException;
 
 /**
- * A standalone, dependency-free JWT implementation for PHP.
+ * A standalone JWT implementation for PHP.
  *
- * Supports HMAC (HS256/384/512), RSA (RS256/384/512) and ECDSA (ES256/384).
+ * Supports HMAC (HS256/384/512), RSA (RS256/384/512), ECDSA (ES256/384/512),
+ * EdDSA (Ed25519 via libsodium) and RSASSA-PSS (PS256/384/512 via OpenSSL).
  *
  * Security guarantees:
  *  - The "alg: none" attack is explicitly rejected.
  *  - Algorithm confusion is prevented because every trusted Key is bound to
  *    a single algorithm and the token algorithm must match it exactly.
- *  - Signatures are compared in constant time (HMAC) and verified via OpenSSL.
+ *  - Signatures are compared in constant time (HMAC/EdDSA) and verified via OpenSSL.
  *  - Time-based claims (exp/nbf/iat) are validated with configurable leeway.
  */
 final class JWT
 {
     /**
      * Algorithm map.
-     * type 'hmac'   => symmetric (hash_hmac)
-     * type 'openssl' => asymmetric RSA (openssl_sign / openssl_verify)
-     * type 'ecdsa'  => asymmetric ECDSA (DER <-> R||S conversion applied).
+     * type 'hmac'    => symmetric (hash_hmac)
+     * type 'openssl' => asymmetric RSA PKCS#1v1.5 (openssl_sign / openssl_verify)
+     * type 'ecdsa'   => asymmetric ECDSA (DER <-> R||S conversion applied)
+     * type 'eddsa'   => asymmetric Ed25519 (libsodium)
+     * type 'rsa-pss' => asymmetric RSASSA-PSS (OpenSSL native PSS padding)
      *
      * @var array<string, array{0: string, 1: string|int}>
      */
     public const ALGORITHMS = [
-        'HS256' => ['hmac', 'sha256'],
-        'HS384' => ['hmac', 'sha384'],
-        'HS512' => ['hmac', 'sha512'],
-        'RS256' => ['openssl', OPENSSL_ALGO_SHA256],
-        'RS384' => ['openssl', OPENSSL_ALGO_SHA384],
-        'RS512' => ['openssl', OPENSSL_ALGO_SHA512],
-        'ES256' => ['ecdsa', OPENSSL_ALGO_SHA256],
-        'ES384' => ['ecdsa', OPENSSL_ALGO_SHA384],
+        'HS256'  => ['hmac',    'sha256'],
+        'HS384'  => ['hmac',    'sha384'],
+        'HS512'  => ['hmac',    'sha512'],
+        'RS256'  => ['openssl', OPENSSL_ALGO_SHA256],
+        'RS384'  => ['openssl', OPENSSL_ALGO_SHA384],
+        'RS512'  => ['openssl', OPENSSL_ALGO_SHA512],
+        'ES256'  => ['ecdsa',   OPENSSL_ALGO_SHA256],
+        'ES384'  => ['ecdsa',   OPENSSL_ALGO_SHA384],
+        'ES512'  => ['ecdsa',   OPENSSL_ALGO_SHA512],
+        'EdDSA'  => ['eddsa',   'EdDSA'],
+        'PS256'  => ['rsa-pss', OPENSSL_ALGO_SHA256],
+        'PS384'  => ['rsa-pss', OPENSSL_ALGO_SHA384],
+        'PS512'  => ['rsa-pss', OPENSSL_ALGO_SHA512],
+    ];
+
+    /**
+     * Map of ECDSA algorithm to R||S byte-length (both r and s concatenated).
+     *
+     * @var array<string, int>
+     */
+    private const ECDSA_CONCAT_LENGTHS = [
+        'ES256' => 64,
+        'ES384' => 96,
+        'ES512' => 132,
     ];
 
     /**
@@ -49,7 +68,9 @@ final class JWT
     public const SUPPORTED_ALGS = [
         'HS256', 'HS384', 'HS512',
         'RS256', 'RS384', 'RS512',
-        'ES256', 'ES384',
+        'ES256', 'ES384', 'ES512',
+        'EdDSA',
+        'PS256', 'PS384', 'PS512',
     ];
 
     /**
@@ -69,7 +90,7 @@ final class JWT
     /**
      * Encode and sign a payload into a JWT string.
      *
-     * @param  array  $payload  claim set
+     * @param  array<string, mixed>  $payload  claim set
      * @param  string|\OpenSSLAsymmetricKey  $key  signing key
      * @param  string  $alg  algorithm name (e.g. HS256)
      * @param  string|null  $keyId  optional "kid" header value
@@ -94,13 +115,13 @@ final class JWT
 
         $header = array_merge($extraHeaders, $header);
 
-        $segments = [];
+        $segments   = [];
         $segments[] = self::urlsafeB64Encode(self::jsonEncode($header));
         $segments[] = self::urlsafeB64Encode(self::jsonEncode($payload));
 
         $signingInput = implode('.', $segments);
-        $signature = self::sign($signingInput, $key, $alg);
-        $segments[] = self::urlsafeB64Encode($signature);
+        $signature    = self::sign($signingInput, $key, $alg);
+        $segments[]   = self::urlsafeB64Encode($signature);
 
         return implode('.', $segments);
     }
@@ -128,11 +149,11 @@ final class JWT
 
         [$headB64, $payloadB64, $sigB64] = $parts;
 
-        $headerRaw = self::urlsafeB64Decode($headB64);
+        $headerRaw  = self::urlsafeB64Decode($headB64);
         $payloadRaw = self::urlsafeB64Decode($payloadB64);
-        $signature = self::urlsafeB64Decode($sigB64);
+        $signature  = self::urlsafeB64Decode($sigB64);
 
-        $header = self::jsonDecode($headerRaw);
+        $header  = self::jsonDecode($headerRaw);
         $payload = self::jsonDecode($payloadRaw);
 
         if (! is_array($header)) {
@@ -267,6 +288,7 @@ final class JWT
         [$type, $hashAlg] = self::ALGORITHMS[$alg];
 
         switch ($type) {
+
             case 'hmac':
                 if (! is_string($key)) {
                     throw new JWTException('HMAC key must be a string.');
@@ -294,7 +316,40 @@ final class JWT
 
                 // Convert the DER signature produced by OpenSSL into the
                 // concatenated R||S format required by the JWT specification.
-                return self::derToConcat($signature, $alg === 'ES256' ? 64 : 96);
+                return self::derToConcat($signature, self::ECDSA_CONCAT_LENGTHS[$alg]);
+
+            case 'eddsa':
+                // Requires PHP ext-sodium (libsodium).
+                if (! function_exists('sodium_crypto_sign_detached')) {
+                    throw new JWTException(
+                        'EdDSA (Ed25519) requires the sodium extension. '.
+                        'Install php-sodium or php8.x-sodium.'
+                    );
+                }
+
+                if (! is_string($key)) {
+                    throw new JWTException('EdDSA private key must be a base64-encoded string.');
+                }
+
+                $rawKey = self::decodeEdDsaKey($key);
+
+                // libsodium expects a 64-byte seed||public key for signing.
+                if (strlen($rawKey) === 32) {
+                    // Seed only — derive the full keypair.
+                    $kp     = sodium_crypto_sign_seed_keypair($rawKey);
+                    $rawKey = sodium_crypto_sign_secretkey($kp);
+                }
+
+                if (strlen($rawKey) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+                    throw new JWTException('EdDSA private key must be 64 bytes (seed+public).');
+                }
+
+                return sodium_crypto_sign_detached($input, $rawKey);
+
+            case 'rsa-pss':
+                // RSASSA-PSS (RFC 8017) — pure PHP EMSA-PSS + raw RSA via openssl_private_encrypt.
+                // openssl_sign() only does PKCS#1 v1.5, so we implement PSS ourselves.
+                return self::rsaPssSign($input, $key, $hashAlg);
 
             default:
                 throw new JWTException('Unknown algorithm type.');
@@ -309,6 +364,7 @@ final class JWT
         [$type, $hashAlg] = self::ALGORITHMS[$alg];
 
         switch ($type) {
+
             case 'hmac':
                 if (! is_string($key)) {
                     throw new JWTException('HMAC key must be a string.');
@@ -330,7 +386,7 @@ final class JWT
 
             case 'ecdsa':
                 // Convert the concatenated R||S signature back into DER for OpenSSL.
-                $der = self::concatToDer($signature);
+                $der    = self::concatToDer($signature);
                 $result = openssl_verify($input, $der, $key, $hashAlg);
 
                 if ($result === -1) {
@@ -339,9 +395,249 @@ final class JWT
 
                 return $result === 1;
 
+            case 'eddsa':
+                if (! function_exists('sodium_crypto_sign_verify_detached')) {
+                    throw new JWTException(
+                        'EdDSA (Ed25519) requires the sodium extension.'
+                    );
+                }
+
+                if (! is_string($key)) {
+                    throw new JWTException('EdDSA public key must be a base64-encoded string.');
+                }
+
+                $rawKey = self::decodeEdDsaKey($key);
+
+                if (strlen($rawKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES) {
+                    throw new JWTException('EdDSA public key must be 32 bytes.');
+                }
+
+                try {
+                    return sodium_crypto_sign_verify_detached($signature, $input, $rawKey);
+                } catch (\SodiumException $e) {
+                    return false;
+                }
+
+            case 'rsa-pss':
+                return self::rsaPssVerify($input, $signature, $key, $hashAlg);
+
             default:
                 throw new JWTException('Unknown algorithm type.');
         }
+    }
+
+    // ---------------------------------------------------------------------
+    //  RSASSA-PSS helpers
+    // ---------------------------------------------------------------------
+
+    /**
+     * Sign using RSASSA-PSS with MGF1 and salt length == hash length.
+     *
+     * @param  string|\OpenSSLAsymmetricKey  $privateKey
+     */
+    private static function rsaPssSign(string $input, $privateKey, int $hashAlg): string
+    {
+        $hashName = self::opensslAlgoToHashName($hashAlg);
+        $digest   = hash($hashName, $input, true);
+        $hashLen  = strlen($digest);
+
+        // Get RSA modulus length in bytes.
+        $details = openssl_pkey_get_details(
+            is_string($privateKey)
+                ? (openssl_pkey_get_private($privateKey) ?: throw new JWTException('Invalid RSA private key.'))
+                : $privateKey
+        );
+
+        if ($details === false || ! isset($details['bits'])) {
+            throw new JWTException('Could not retrieve RSA key details for PSS signing.');
+        }
+
+        $emLen = (int) ceil(($details['bits'] - 1) / 8);
+
+        $em = self::emsaPssEncode($digest, $hashName, $hashLen, $emLen);
+
+        // Raw RSA private operation (no padding from OpenSSL side).
+        $sig = '';
+        $key = is_string($privateKey)
+            ? (openssl_pkey_get_private($privateKey) ?: throw new JWTException('Invalid RSA private key.'))
+            : $privateKey;
+
+        if (openssl_private_encrypt($em, $sig, $key, OPENSSL_NO_PADDING) === false) {
+            throw new JWTException('RSA-PSS raw encrypt failed: '.openssl_error_string());
+        }
+
+        return $sig;
+    }
+
+    /**
+     * Verify RSASSA-PSS signature.
+     *
+     * @param  string|\OpenSSLAsymmetricKey  $publicKey
+     */
+    private static function rsaPssVerify(string $input, string $signature, $publicKey, int $hashAlg): bool
+    {
+        $hashName = self::opensslAlgoToHashName($hashAlg);
+        $digest   = hash($hashName, $input, true);
+        $hashLen  = strlen($digest);
+
+        $key = is_string($publicKey)
+            ? (openssl_pkey_get_public($publicKey) ?: throw new JWTException('Invalid RSA public key.'))
+            : $publicKey;
+
+        $details = openssl_pkey_get_details($key);
+
+        if ($details === false || ! isset($details['bits'])) {
+            throw new JWTException('Could not retrieve RSA key details for PSS verification.');
+        }
+
+        $emLen = (int) ceil(($details['bits'] - 1) / 8);
+
+        // Raw RSA public operation.
+        $em = '';
+
+        if (openssl_public_decrypt($signature, $em, $key, OPENSSL_NO_PADDING) === false) {
+            return false;
+        }
+
+        return self::emsaPssVerify($digest, $em, $hashName, $hashLen, $emLen);
+    }
+
+    /**
+     * EMSA-PSS encoding (RFC 8017 §9.1.1).
+     */
+    private static function emsaPssEncode(
+        string $mHash,
+        string $hashName,
+        int $hLen,
+        int $emLen
+    ): string {
+        $sLen = $hLen; // salt length == hash length (matches firebase/php-jwt default)
+
+        if ($emLen < $hLen + $sLen + 2) {
+            throw new JWTException('EMSA-PSS: encoding error — emLen too small.');
+        }
+
+        $salt   = random_bytes($sLen);
+        $mPrime = str_repeat("\x00", 8).$mHash.$salt;
+        $h      = hash($hashName, $mPrime, true);
+        $ps     = str_repeat("\x00", $emLen - $sLen - $hLen - 2);
+        $db     = $ps."\x01".$salt;
+        $dbMask = self::mgf1($h, $emLen - $hLen - 1, $hashName);
+        $maskedDb = $db ^ $dbMask;
+
+        // Clear the leftmost bits.
+        $maskedDb[0] = chr(ord($maskedDb[0]) & 0x7F);
+
+        return $maskedDb.$h."\xBC";
+    }
+
+    /**
+     * EMSA-PSS verification (RFC 8017 §9.1.2).
+     */
+    private static function emsaPssVerify(
+        string $mHash,
+        string $em,
+        string $hashName,
+        int $hLen,
+        int $emLen
+    ): bool {
+        $sLen = $hLen;
+
+        if ($emLen < $hLen + $sLen + 2) {
+            return false;
+        }
+
+        if (ord($em[$emLen - 1]) !== 0xBC) {
+            return false;
+        }
+
+        $maskedDb = substr($em, 0, $emLen - $hLen - 1);
+        $h        = substr($em, $emLen - $hLen - 1, $hLen);
+
+        if (ord($maskedDb[0]) & 0x80) {
+            return false;
+        }
+
+        $dbMask = self::mgf1($h, $emLen - $hLen - 1, $hashName);
+        $db     = $maskedDb ^ $dbMask;
+        $db[0]  = chr(ord($db[0]) & 0x7F);
+
+        // Check that the first emLen-hLen-sLen-2 bytes of DB are zero, followed by 0x01.
+        $psLen = $emLen - $hLen - $sLen - 2;
+
+        for ($i = 0; $i < $psLen; $i++) {
+            if ($db[$i] !== "\x00") {
+                return false;
+            }
+        }
+
+        if ($db[$psLen] !== "\x01") {
+            return false;
+        }
+
+        $salt   = substr($db, $psLen + 1);
+        $mPrime = str_repeat("\x00", 8).$mHash.$salt;
+        $hPrime = hash($hashName, $mPrime, true);
+
+        return hash_equals($h, $hPrime);
+    }
+
+    /**
+     * MGF1 mask generation function (RFC 8017 Appendix B.2.1).
+     */
+    private static function mgf1(string $seed, int $length, string $hashName): string
+    {
+        $mask = '';
+        $count = (int) ceil($length / strlen(hash($hashName, '', true)));
+
+        for ($i = 0; $i < $count; $i++) {
+            $c = pack('N', $i);
+            $mask .= hash($hashName, $seed.$c, true);
+        }
+
+        return substr($mask, 0, $length);
+    }
+
+    /**
+     * Map OPENSSL_ALGO_* constant to a hash() algorithm name.
+     */
+    private static function opensslAlgoToHashName(int $algo): string
+    {
+        return match ($algo) {
+            OPENSSL_ALGO_SHA256 => 'sha256',
+            OPENSSL_ALGO_SHA384 => 'sha384',
+            OPENSSL_ALGO_SHA512 => 'sha512',
+            default             => throw new JWTException("Unsupported OpenSSL hash algorithm constant: {$algo}"),
+        };
+    }
+
+    // ---------------------------------------------------------------------
+    //  EdDSA helpers
+    // ---------------------------------------------------------------------
+
+    /**
+     * Accept a key in base64, base64url, or raw binary form and return raw bytes.
+     */
+    private static function decodeEdDsaKey(string $key): string
+    {
+        // Already raw binary of the expected length?
+        if (strlen($key) === SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES ||
+            strlen($key) === SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+            return $key;
+        }
+
+        // Try base64url first, then standard base64.
+        try {
+            $raw = self::urlsafeB64Decode($key);
+        } catch (\Throwable) {
+            $raw = base64_decode($key, true);
+        }
+
+        if ($raw === false || $raw === '') {
+            throw new JWTException('EdDSA key could not be decoded. Provide base64url, base64, or raw bytes.');
+        }
+
+        return $raw;
     }
 
     // ---------------------------------------------------------------------
@@ -379,7 +675,7 @@ final class JWT
             throw new JWTException('Invalid DER integer.');
         }
 
-        $len = ord($der[$offset++]);
+        $len   = ord($der[$offset++]);
         $value = substr($der, $offset, $len);
         $offset += $len;
 
@@ -395,11 +691,11 @@ final class JWT
         }
 
         $half = (int) ($len / 2);
-        $r = substr($sig, 0, $half);
-        $s = substr($sig, $half);
+        $r    = substr($sig, 0, $half);
+        $s    = substr($sig, $half);
 
-        $r = self::encodeDerInteger($r);
-        $s = self::encodeDerInteger($s);
+        $r    = self::encodeDerInteger($r);
+        $s    = self::encodeDerInteger($s);
 
         $body = $r.$s;
 
