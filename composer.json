@@ -30,6 +30,7 @@
         "issues": "https://github.com/swanflutter/native-jwt/issues",
         "source": "https://github.com/swanflutter/native-jwt"
     },
+    "version": "1.2.0",
     "require": {
         "php": "^8.1",
         "ext-json": "*",
