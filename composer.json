@@ -3,7 +3,6 @@
     "description": "A PHP 8.1+ JWT library (HMAC, RSA, ECDSA, EdDSA, RSASSA-PSS) with JWK/JWKS support, PSR-6 cached key sets, and built-in algorithm-confusion and alg=none protection.",
     "type": "library",
     "license": "MIT",
-    "version": "1.1.0",
     "keywords": [
         "jwt",
         "token",
